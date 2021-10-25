@@ -6,6 +6,8 @@
 #include <signal.h>
 #include <sys/types.h>
 
+#define BUFFER_SIZE 1024
+
 int main()
 {
     int fifoCmd, fifoAns;
@@ -26,7 +28,7 @@ int main()
         command[r] = 0;
         size_t l = strlen(command);
         write(fifoCmd, &l, sizeof(long));
-        int nbr = write(fifoCmd, command, strlen(command));
+        int nbr = write(fifoCmd, command, strlen(command) + 1);
         if(nbr < 0) {
             perror("Eroare write fifo");
             exit(-5);
