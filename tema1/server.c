@@ -105,8 +105,12 @@ int main()
                 while(1) {
                     strcpy(command, "");
                     size_t l;
-                    read(fifoCmd, &l, sizeof(long));
-                    int nb = read(fifoCmd, command, l + 1);
+                    int nb = read(fifoCmd, &l, sizeof(long));
+                    if(nb < 0) {
+                        perror("Eroare read");
+                        exit(-3);
+                    }
+                    nb = read(fifoCmd, command, l + 1);
                     //command[l] = 0;
                     if(nb < 0) {
                         perror("Eroare read comanda");
@@ -128,20 +132,44 @@ int main()
                             }
                             if(rv == 1) {
                                 int l = 20;
-                                write(fifoAns, &l, sizeof(int));
-                                write(fifoAns, "16Login succesful!\n", 20);
+                                nb = write(fifoAns, &l, sizeof(int));
+                                if(nb < 0) {
+                                    perror("Eroare write fifo login");
+                                    exit(-3);
+                                }
+                                nb = write(fifoAns, "16Login succesful!\n", 20);
+                                if(nb < 0) {
+                                    perror("Eroare write fifo login");
+                                    exit(-3);
+                                }
                                 logged = 1;
                             }
                             else if(rv == 0){
                                 int l = 31;
-                                write(fifoAns, &l, sizeof(int));
-                                write(fifoAns, "27Login failed : bad username\n", 31);
+                                nb = write(fifoAns, &l, sizeof(int));
+                                if(nb < 0) {
+                                    perror("Eroare write fifo login");
+                                    exit(-3);
+                                }
+                                nb = write(fifoAns, "27Login failed : bad username\n", 31);
+                                if(nb < 0) {
+                                    perror("Eroare write fifo login");
+                                    exit(-3);
+                                }
                             }
                         }
                         else {
                             int l = 21;
-                            write(fifoAns, &l, sizeof(int));
-                            write(fifoAns, "17Already logged in\n", 21);
+                            nb = write(fifoAns, &l, sizeof(int));
+                            if(nb < 0) {
+                                perror("Eroare write fifo login");
+                                exit(-3);
+                            }
+                            nb = write(fifoAns, "17Already logged in\n", 21);
+                            if(nb < 0) {
+                                perror("Eroare write fifo login");
+                                exit(-3);
+                            }
                         }
                     }
                     else if(strncmp(command, "get-logged-users", 16) == 0) {
@@ -163,13 +191,29 @@ int main()
                             char fullanswer[1100];
                             sprintf(fullanswer, "%ld%s", strlen(answer), answer);
                             int l = strlen(fullanswer) + 1;
-                            write(fifoAns, &l, sizeof(int));
-                            write(fifoAns, fullanswer, l);
+                            nb = write(fifoAns, &l, sizeof(int));
+                            if(nb < 0) {
+                                perror("Eroare write fifo GLU");
+                                exit(-4);
+                            }
+                            nb = write(fifoAns, fullanswer, l);
+                            if(nb < 0) {
+                                perror("Eroare write fifo GLU");
+                                exit(-4);
+                            }
                         }
                         else {
                             int l = 26;
-                            write(fifoAns, &l, sizeof(int));
-                            write(fifoAns, "22Error : Not logged in.\n", 26);
+                            nb = write(fifoAns, &l, sizeof(int));
+                            if(nb < 0) {
+                                perror("Eroare write fifo GLU");
+                                exit(-4);
+                            }
+                            nb = write(fifoAns, "22Error : Not logged in.\n", 26);
+                            if(nb < 0) {
+                                perror("Eroare write fifo GLU");
+                                exit(-4);
+                            }
                         }
                     }
                     else if(strncmp(command, "get-proc-info : ", 16) == 0) {
@@ -192,8 +236,14 @@ int main()
                             if(strncmp(answer, "9Wrong pid\n", 11) == 0)
                             {
                                 int l = 12;
-                                write(fifoAns, &l, sizeof(int));
-                                write(fifoAns, answer, l);
+                                if(write(fifoAns, &l, sizeof(int) < 0)) {
+                                    perror("Eroare write fifo GPU");
+                                    exit(-9);
+                                }
+                                if(write(fifoAns, answer, l) < 0) {
+                                    perror("Eroare write fifo GPU");
+                                    exit(-9);
+                                }
                             }
                             else{
                                 printf("%s\n", answer);
@@ -202,36 +252,75 @@ int main()
                                 char fullanswer[1100];
                                 sprintf(fullanswer, "%ld%s", strlen(answer), answer);
                                 int l = strlen(fullanswer) + 2;
-                                write(fifoAns, &l, sizeof(int));
-                                write(fifoAns, fullanswer, l);
+                                if(write(fifoAns, &l, sizeof(int)) < 0) {
+                                    perror("Eroare write fifo GPU");
+                                    exit(-9);
+                                } 
+                                if(write(fifoAns, fullanswer, l) < 0) {
+                                    perror("Eroare write fifo GPU");
+                                    exit(-9);
+                                }
                             }
                         } 
                         else {
                             int l = 26;
-                            write(fifoAns, &l, sizeof(int));
-                            write(fifoAns, "22Error : Not logged in.\n", 26);
+                            if(write(fifoAns, &l, sizeof(int)) < 0){
+                                perror("Eroare write fifo GPU");
+                                exit(-9);
+                            }
+                            if(write(fifoAns, "22Error : Not logged in.\n", 26) < 0) {
+                                perror("Eroare write fifo GPU");
+                                exit(-9);
+                            }
                         }
                     }
                     else if(strncmp(command, "logout", 6) == 0) {
                         logged = 0;
                         int l = 14;
-                        write(fifoAns, &l, sizeof(int));
-                        write(fifoAns, "10Logged out\n", 14);
+                        if(write(fifoAns, &l, sizeof(int)) < 0) {
+                            perror("Eroare write fifo logout");
+                            exit(-10);
+                        }
+                        if(write(fifoAns, "10Logged out\n", 14) < 0) {
+                            perror("Eroare write fifo logout");
+                            exit(-10);
+                        }
                     }
                     else if(strncmp(command, "quit", 4) == 0) {
-                        write(pipefdLogin1[1], "exit", 4);
-                        write(sockpGPI[0], "exit", 4);
-                        write(sockpGLU[0], "exit", 4);
+                        if(write(pipefdLogin1[1], "exit", 4) < 0) {
+                            perror("Eroare write exit login");
+                            exit(-11);
+                        }
+                        if(write(sockpGPI[0], "exit", 4) < 0) {
+                            perror("Eroare write exit GPI");
+                            exit(-11);
+                        }
+                        if(write(sockpGLU[0], "exit", 4) < 0) {
+                            perror("Eroare write exit GLU");
+                            exit(-11);
+                        }
                         logged = 0;
                         int l = 28;
-                        write(fifoAns, &l, sizeof(int));
-                        write(fifoAns, "24Server exited succesfuly\n", 28);
+                        if(write(fifoAns, &l, sizeof(int)) < 0) {
+                            perror("Eroare write fifo quit");
+                            exit(-12);
+                        }
+                        if(write(fifoAns, "24Server exited succesfuly\n", 28) < 0) {
+                            perror("Eroare write fifo quit");
+                            exit(-12);
+                        }
                         break;
                     }
                     else {
                         int l = 18;
-                        write(fifoAns, &l, sizeof(int));
-                        write(fifoAns, "14Unkown command\n", 18);
+                        if(write(fifoAns, &l, sizeof(int)) < 0) {
+                            perror("Eroare write fifo unknown_comm");
+                            exit(-13);
+                        }
+                        if(write(fifoAns, "14Unkown command\n", 18) < 0 ){
+                            perror("Eroare write fifo unknown_comm");
+                            exit(-13);
+                        }
                     }
                 }
                 wait(NULL); wait(NULL); wait(NULL);
@@ -374,7 +463,6 @@ int main()
         close(pipefdLogin2[1]);
         exit(0);
     }
-
 
     return 0;
 }
