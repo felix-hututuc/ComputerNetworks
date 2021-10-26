@@ -177,13 +177,13 @@ int main()
                             command[l - 1] = 'x';
                             command[l] = '\0';
                             nb = write(sockpGPI[0], command + 16, l - 16);
-                            printf("%s\n", command + 16);
                             if(nb < 0) {
                                 perror("[parent]Eroare write socket");
                                 exit(-7);
                             }
                             sleep(1);
                             char answer[1000];
+                            strcpy(answer, "");
                             nb = read(sockpGPI[0], answer, 1000);
                             if(nb < 0) {
                                 perror("[parent]Eroare read socket");
@@ -196,8 +196,9 @@ int main()
                                 write(fifoAns, answer, l);
                             }
                             else{
-                                answer[strlen(answer)] = '\n';
-                                answer[strlen(answer) + 1] = '\0';
+                                printf("%s\n", answer);
+                                strcat(answer, "\n");
+                                printf("%s\n", answer);
                                 char fullanswer[1100];
                                 sprintf(fullanswer, "%ld%s", strlen(answer), answer);
                                 int l = strlen(fullanswer) + 2;
@@ -274,7 +275,6 @@ int main()
                     pid[i] = '\0';
                     char procPath[50];
                     sprintf(procPath, "/proc/%s/status", pid);
-                    printf("%s\n", procPath);
                     FILE *fp = fopen (procPath, "r" );
                     rewind(fp);
                     if(fp == NULL) {
@@ -296,7 +296,6 @@ int main()
                             }
                         }
                         answer[strlen(answer) - 1] = '\0';
-                        printf("%s\n", answer);
                         nb = write(sockpGPI[1], answer, strlen(answer) + 1);
                         if(nb < 0)
                             perror("[child]Eroare write socket");
@@ -324,7 +323,8 @@ int main()
                     exit(-1);
                 }
                 if(strncmp(command, "exit", 4) == 0) break;
-                char answer[1000] = "";
+                char answer[1000];
+                strcpy(answer, "");
 
                 setutent();
                 struct utmp* utmpStruct;
