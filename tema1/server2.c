@@ -146,6 +146,7 @@ int main()
                 }
                 if(pid) {
                     close(socketfd[1]);
+                    
                 }
                 else {
                     close(socketfd[0]);

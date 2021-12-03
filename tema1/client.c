@@ -6,8 +6,6 @@
 #include <signal.h>
 #include <sys/types.h>
 
-#define BUFFER_SIZE 1024
-
 int main()
 {
     int fifoCmd, fifoAns;
