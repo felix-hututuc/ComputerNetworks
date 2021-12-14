@@ -84,6 +84,12 @@ build CMakeFiles/QuizzGame.dir/clientQuizzGame.cpp.o: CXX_COMPILER__QuizzGame_De
   OBJECT_DIR = CMakeFiles/QuizzGame.dir
   OBJECT_FILE_DIR = CMakeFiles/QuizzGame.dir
 
+build CMakeFiles/QuizzGame.dir/Player.cpp.o: CXX_COMPILER__QuizzGame_Debug /home/felix/Documents/RdC/ComputerNetworks/QuizzGame/Player.cpp || cmake_object_order_depends_target_QuizzGame
+  DEP_FILE = CMakeFiles/QuizzGame.dir/Player.cpp.o.d
+  FLAGS = -g -std=gnu++17
+  OBJECT_DIR = CMakeFiles/QuizzGame.dir
+  OBJECT_FILE_DIR = CMakeFiles/QuizzGame.dir
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target QuizzGame
@@ -92,7 +98,7 @@ build CMakeFiles/QuizzGame.dir/clientQuizzGame.cpp.o: CXX_COMPILER__QuizzGame_De
 #############################################
 # Link the executable QuizzGame
 
-build QuizzGame: CXX_EXECUTABLE_LINKER__QuizzGame_Debug CMakeFiles/QuizzGame.dir/servQuizzGame.cpp.o CMakeFiles/QuizzGame.dir/clientQuizzGame.cpp.o
+build QuizzGame: CXX_EXECUTABLE_LINKER__QuizzGame_Debug CMakeFiles/QuizzGame.dir/servQuizzGame.cpp.o CMakeFiles/QuizzGame.dir/clientQuizzGame.cpp.o CMakeFiles/QuizzGame.dir/Player.cpp.o
   FLAGS = -g
   OBJECT_DIR = CMakeFiles/QuizzGame.dir
   POST_BUILD = :

@@ -3,4 +3,4 @@ project(QuizzGame)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(QuizzGame servQuizzGame.cpp clientQuizzGame.cpp)
+add_executable(QuizzGame servQuizzGame.cpp clientQuizzGame.cpp Player.cpp Player.h)
