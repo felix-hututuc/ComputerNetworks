@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <algorithm>
 #include <random>
+#include <time.h>
 #include "Player.h"
 
 #define PORT 2022
@@ -26,9 +27,11 @@ const char* IP = "192.168.1.231";
 const char* DIR = "./db/QUIZZ.db";
 bool acceptPlayers = true, openServer = true;
 int numberOfPlayers = 0, numberOfThreads = 0;
+int timeToAnswer = 30;
 std::vector<Player> players;
 std::vector<int> questionsIndex;
 pthread_mutex_t mutexPlayerVec;
+sqlite3* DB;
 
 
 struct ThreadArg {
@@ -56,12 +59,6 @@ void sigHandler(int sign)
 
 static int createDB()
 {
-    sqlite3* DB;
-    
-    if (sqlite3_open(DIR, &DB) < 0) {
-        perror("Eroare creare db\n");
-        return -1;
-    }
 
     std::string sql = "CREATE TABLE IF NOT EXISTS QUIZZ("
         "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -81,17 +78,15 @@ static int createDB()
     } else {
         std::cout << "DB and Table created succesfuly\n";
     }
-    sqlite3_close(DB);
 
     return 0;
 }
 
 static int insertData()
 {
-    sqlite3* DB;
     char* errorMsg;
 
-    int ret = sqlite3_open(DIR, &DB);
+    int ret;
 
     std::string sql("INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('What protocol is used to find the hardware address of a local device?', 'RARP', 'ARP', 'IP', 'ICMP', 'B');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which of the following animals can run the fastest?', 'Cheetah', 'Leopard', 'Tiger', 'Lion', 'A');"
@@ -137,11 +132,9 @@ static int insertData()
 //     return 0;
 // }
 
-static Question selectQuestion(int index)
+Question* selectQuestion(int index)
 {
-    sqlite3* DB;
-
-    int ret = sqlite3_open(DIR, &DB);
+    int ret;
 
     std::string strIndex = std::to_string(index);
     std::string sql = "SELECT question, ans1, ans2, ans3, ans4, corans FROM QUIZZ WHERE ID = ";
@@ -162,23 +155,21 @@ static Question selectQuestion(int index)
         exit(-2);
     }
 
-    Question quiz;
+    Question* quiz = (Question*)malloc(sizeof(Question));
     unsigned char column[100];
     //column = sqlite3_column_text(sqlStmt, 0);
     strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 0));
-    quiz.question = (char*) column;
+    quiz->question = (char*) column;
     strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 1));
-    quiz.ans1 = (char*) column;
+    quiz->ans1 = (char*) column;
     strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 2));
-    quiz.ans2 = (char*) column;
+    quiz->ans2 = (char*) column;
     strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 3));
-    quiz.ans3 = (char*) column;
+    quiz->ans3 = (char*) column;
     strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 4));
-    quiz.ans4 = (char*) column;
-    quiz.corAns = sqlite3_column_int(sqlStmt, 5);
-
-    sqlite3_close(DB);
-
+    quiz->ans4 = (char*) column;
+    strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 5));
+    quiz->corAns = column[0];
     return quiz;
 }
 
@@ -339,13 +330,59 @@ static void* playerRoutine(void* args) {
     }
 
     int index = 0;
-    Question quiz;
+    Question* quiz;
 
     quiz = selectQuestion(questionsIndex[index]);
-    sendQuestion(client.sd, quiz);
+
+    sendQuestion(client.sd, *quiz);
+
+    time_t startTime = time(0);
+    time_t end, timeTaken;
+    int timeLeft = timeToAnswer;
+    bool answered = false;
+    while (timeLeft > 0 && !answered){
+        nb = recv(client.sd, &receivedChar, 1, MSG_DONTWAIT);
+        // if (nb < 0) {
+        //     perror("[server]Eroare recv() char\n");
+        //     close(client.sd);
+        //     exit(5);
+        // }
+        if (nb == 1) {
+            answered = true;
+            break;
+        }
+        end = time(0);
+        timeTaken = end - startTime;
+        timeLeft = timeToAnswer - timeTaken;
+    }
+    if (!answered) {
+        std::cout << "Time expired\n";
+        nb = send(client.sd, &loggedIn, sizeof(bool), 0);
+        if(nb < 0) {
+            perror("[server]Eroare send()\n");
+            close(client.sd);
+            exit(1);
+        }
+    } else {
+        nb = recv(client.sd, &receivedChar, 1, 0);
+        if (nb < 0) {
+            perror("[server]Eroare recv() char\n");
+            close(client.sd);
+            exit(5);
+        }
+        std::cout << receivedChar - 32 << "\n";
+        std::cout << quiz->corAns << "\n";
+        if(quiz->corAns == (char)(receivedChar - 32)) {
+            players[indexInVec].incScore();
+            std::cout << "Correct answer\n";
+        } else {
+            std::cout << "Wrong answer\n";
+        }
+    }
     
     close(client.sd);
     free(args);
+    free(quiz);
     pthread_exit(NULL);
 }
 
@@ -366,6 +403,10 @@ int main(int argc, char* argv[]) {
             }
         }
     } else { 
+        if (sqlite3_open(DIR, &DB) < 0) {
+            perror("Eroare open DB\n");
+            return 3;
+        }
         createDB();
         // insertData();
 
