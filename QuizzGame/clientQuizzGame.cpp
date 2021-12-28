@@ -111,18 +111,18 @@ void printQuestion(const Question& quiz)
 {
     clear();
     int row, col;
-    // getmaxyx(stdscr, row, col);
-    // mvprintw(1.5 * row / 8, (col - strlen(quiz.question)) / 2, "Q: %s", quiz.question);
-    // mvprintw(3.5 * row / 8, (col - strlen(quiz.ans1)) / 6, "A. %s", quiz.ans1);
-    // mvprintw(3.5 * row / 8, 4 * (col - strlen(quiz.ans2)) / 6, "B. %s", quiz.ans2);
-    // mvprintw(5.5 * row / 8, (col - strlen(quiz.ans3)) / 6, "C. %s", quiz.ans3);
-    // mvprintw(5.5 * row / 8, 4 * (col - strlen(quiz.ans4)) / 6, "D. %s", quiz.ans4);
-    // refresh();
-    std::cout << "Q: " << quiz.question << "\n";
-    std::cout << "A: " << quiz.ans1 << "\n";
-    std::cout << "B: " << quiz.ans2 << "\n";
-    std::cout << "C: " << quiz.ans3 << "\n";
-    std::cout << "D: " << quiz.ans4 << "\n";
+    getmaxyx(stdscr, row, col);
+    mvprintw(1.5 * row / 8, (col - strlen(quiz.question)) / 2, "Q: %s", quiz.question);
+    mvprintw(3.5 * row / 8, (col - strlen(quiz.ans1)) / 6, "A. %s", quiz.ans1);
+    mvprintw(3.5 * row / 8, 4 * (col - strlen(quiz.ans2)) / 6, "B. %s", quiz.ans2);
+    mvprintw(5.5 * row / 8, (col - strlen(quiz.ans3)) / 6, "C. %s", quiz.ans3);
+    mvprintw(5.5 * row / 8, 4 * (col - strlen(quiz.ans4)) / 6, "D. %s", quiz.ans4);
+    refresh();
+    // std::cout << "Q: " << quiz.question << "\n";
+    // std::cout << "A: " << quiz.ans1 << "\n";
+    // std::cout << "B: " << quiz.ans2 << "\n";
+    // std::cout << "C: " << quiz.ans3 << "\n";
+    // std::cout << "D: " << quiz.ans4 << "\n";
 
 }
 
@@ -194,30 +194,30 @@ int main() {
         }
     } while (!accepted);
 
-    // initscr();
-    // cbreak();
-    // noecho();
+    initscr();
+    cbreak();
+    noecho();
     int row, col;
     getmaxyx(stdscr, row, col);
     char msg1[] = "Press any key to start the game.";
     char msg2[] = "Time expired!";
     char msg3[] = "Waiting for other players.";
     
-    std::cout << "Press any key to start the game.\n";
+    // std::cout << "Press any key to start the game.\n";
 
-    //mvprintw(row / 2, (col - strlen(msg1)) / 2, "%s", msg1);
+    mvprintw(row / 2, (col - strlen(msg1)) / 2, "%s", msg1);
 
     char key = 0;
-    //key = getch();
-    std::cin >> key;
+    key = getch();
+    // std::cin >> key;
     nb = send(socketDescriptor, &key, 1, 0);
     if (nb <= 0) {
         perror("[client]Eroare send()\n");
         close(socketDescriptor);
         return errno;
     }
-    // clear();
-    // refresh();
+    clear();
+    refresh();
     bool finished;
     do {
         Question* quiz;
@@ -233,8 +233,8 @@ int main() {
         } else if (pid == 0) {
             free(quiz);
             int n;
-            // key = getch();
-            std::cin >> key;
+            key = getch();
+            // std::cin >> key;
             n = send(socketDescriptor, &key, sizeof(char), 0);
             if (n <= 0) {
                 perror("[client]Eroare send()\n");
@@ -252,18 +252,18 @@ int main() {
         }
         if (!answered) {
             kill(pid, SIGTERM);
-            // clear();
-            // refresh();
-            system("clear");
-            // mvprintw(row / 2, (col - strlen(msg2)) / 2, "%s", msg2);
-            // refresh();
-            printf("%s\n", msg2);
-            sleep(2);
+            clear();
+            refresh();
+            // system("clear");
+            mvprintw(row / 2, (col - strlen(msg2)) / 2, "%s", msg2);
+            refresh();
+            // printf("%s\n", msg2);
+            sleep(1);
         } 
-        // clear();
-        // mvprintw(row / 2, (col - strlen(msg3)) / 2, "%s", msg3);
-        // refresh();
-        printf("%s\n", msg3);
+        clear();
+        mvprintw(row / 2, (col - strlen(msg3)) / 2, "%s", msg3);
+        refresh();
+        // printf("%s\n", msg3);
         free(quiz);
         nb = recv(socketDescriptor, &finished, sizeof(bool), 0);
         if (nb < 0) {
@@ -273,9 +273,12 @@ int main() {
         // refresh();
     }while (!finished);
 
-    system("clear");
+    // system("clear");
 
-    std::cout << "Game ended!\n";
+    clear();
+    mvprintw(row / 2, (col - 11) / 2, "Game ended!");
+    refresh();
+    // std::cout << "Game ended!\n";
 
     int nrOfWinners, maxScore;
     nb = recv(socketDescriptor, &nrOfWinners, sizeof(int), 0);
@@ -289,9 +292,15 @@ int main() {
         return errno;
     }
     if (nrOfWinners > 1) {
-        std::cout << "The winners are : \n";
+        clear();
+        mvprintw(row / 2, (col - 18) / 2, "The winners are : \n");
+        refresh();
+        // std::cout << "The winners are : \n";
     } else {
-        std::cout << "The winner is : \n";
+        clear();
+        mvprintw(row / 2, (col - 16) / 2, "The winner is : ");
+        refresh();
+        // std::cout << "The winner is : ";
     }
     int len;
     char wUsername[50];
@@ -309,9 +318,13 @@ int main() {
             exit(1);
         }
 
-        std::cout << wUsername << "\n";
+        mvprintw(row / 2 + i * 2, (col - 18) / 2 + 18, "%s", wUsername);
+        refresh();
+        // std::cout << wUsername << "\n";
     }
-    std::cout << "Max Score = " << maxScore << "\n";
+    mvprintw(row / 2 + 2.5, (col - 14) / 2, "Max Score = %d", maxScore);
+    refresh();
+    // std::cout << "Max Score = " << maxScore << "\n";
 
     int myScore;
     nb = recv(socketDescriptor, &myScore, sizeof(int), 0);
@@ -320,7 +333,9 @@ int main() {
         close(socketDescriptor);
         exit(1);
     }
-    std::cout << "You had " << myScore << " points.\n";
+    mvprintw(row / 2 + 5, (col - 19) / 2, "You had %d points", maxScore);
+    refresh();
+    // std::cout << "You had " << myScore << " points.\n";
     close(socketDescriptor);
     while(1);
     return 0;

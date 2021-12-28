@@ -55,10 +55,11 @@ void sigHandler(int sign)
         exit(0);
     }
 
-    if(sign == SIGPIPE) {
-        printf("A player left the game.\n");
-        numberOfThreads--;
-    }
+    // if(sign == SIGPIPE) {
+    //     printf("A player left the game.\n");
+    //     numberOfThreads--;
+    //     numberOfPlayers--;
+    // }
 }
 
 static int createDB()
@@ -367,6 +368,10 @@ static void* playerRoutine(void* args) {
             answered = true;
             break;
         }
+        else if(nb == 0) {
+            numberOfPlayers--;
+            pthread_exit(NULL);
+        }
         end = time(0);
         timeTaken = end - startTime;
         timeLeft = timeToAnswer - timeTaken;
@@ -449,6 +454,10 @@ static void* playerRoutine(void* args) {
                 answered = true;
                 break;
             }
+            else if(nb == 0) {
+                numberOfPlayers--;
+                pthread_exit(NULL);
+            }
             end = time(0);
             timeTaken = end - startTime;
             timeLeft = timeToAnswer - timeTaken;
@@ -512,6 +521,11 @@ static void* playerRoutine(void* args) {
         // std::cout << "HERE\n";
     }
 
+    if(passedBarrier != numberOfPlayers) {
+        usleep(50000);
+    }
+    // std::cout << "HERE\n";
+    
     int maxScore = 0;
     std::vector<Player> winners;
     for (auto p : players) {
