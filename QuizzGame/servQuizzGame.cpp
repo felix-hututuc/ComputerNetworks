@@ -23,11 +23,11 @@
 #define PORT 2022
 
 extern int errno;
-const char* IP = "192.168.1.231";
+const char* IP = "127.0.0.1";
 const char* DIR = "./db/QUIZZ.db";
 bool acceptPlayers = true, openServer = true;
 int numberOfPlayers = 0, numberOfThreads = 0;
-int timeToAnswer = 30, numberOfQuestions = 3;
+int timeToAnswer = 10, numberOfQuestions = 3;
 int reachedBarrier = 0, passedBarrier = 0;
 std::vector<Player> players;
 std::vector<int> questionsIndex;
@@ -103,7 +103,7 @@ static int insertData()
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which of the following services is used to translate a web address into an IP address?', 'DNS', 'WINS', 'DHCP', 'Telnet', 'A');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which protocol is used by FTP to transfer files over the Internet?', 'SMTP', 'UDP', 'SNMP', 'TCP', 'D');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which port number is used by SMTP ?', '20', '23', '25', '143', 'C');"
-    "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('What is the purpose of TCP/UDP port numbers ?', 'To indicate the beginning of a three-way handshake', 'To reassemble the segments into the correct order', 'To identify the numbers of the data packets that can be sent without acknowledgment', 'To track the different conversations crossing the network at the same time', 'D');"
+    "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('A distributed network configuration in which all data/information pass through a central computer is', 'Star network', 'Bus network', 'Ring network', 'None of these answers', 'A');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which layer 4 protocol is used for a Telnet connection?', 'IP', 'TCP', 'TCP/IP', 'UDP', 'B');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('If you use either Telnet or FTP, which is the highest layer you are using to transmit data?', 'Application', 'Presentation', 'Session', 'Transport', 'A');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('What layer in the TCP/IP stack is equivalent to the Transport layer of the OSI model?', 'Application', 'Host-to-Host', 'Internet', 'Network Access', 'B');"
@@ -145,52 +145,29 @@ Question* selectQuestion(int index)
     std::string sql = "SELECT question, ans1, ans2, ans3, ans4, corans FROM QUIZZ WHERE ID = ";
     sql = sql + strIndex + ";";
 
-    // ret = sqlite3_exec(DB, sql.c_str(), callback, NULL, &errorMsg);
-    // std::cout << "Before prepare\n";
-
     sqlite3_stmt* sqlStmt;
     ret = sqlite3_prepare_v2(DB, sql.c_str(), sql.size() + 1, &sqlStmt, NULL);
     if (ret != SQLITE_OK) {
         perror("Eroare select db");
         exit(-1);
     }
-    // std::cout << "After prepare\n";
     ret = sqlite3_step(sqlStmt);
     if (ret == SQLITE_ERROR) {
         perror("Eroare select db");
         exit(-2);
     }
-    // std::cout << "After step\n";
 
     Question* quiz = (Question*)malloc(sizeof(Question));
-    // std::cout << "After malloc\n";
 
-    //column = sqlite3_column_text(sqlStmt, 0);
     strcpy(quiz->question, (char*)sqlite3_column_text(sqlStmt, 0));
-    // std::cout << "After malloc1\n";
-    // quiz->question = (char*) column;
-    // std::cout << "After malloc2\n";
     strcpy(quiz->ans1, (char*)sqlite3_column_text(sqlStmt, 1));
-    // std::cout << "After malloc3\n";
-    // quiz->ans1 = (char*) column;
-    // std::cout << "After malloc4\n";
     strcpy(quiz->ans2, (char*)sqlite3_column_text(sqlStmt, 2));
-    // std::cout << "After malloc5\n";
-    // quiz->ans2 = (char*) column;
-    // std::cout << "After malloc6\n";
     strcpy(quiz->ans3, (char*)sqlite3_column_text(sqlStmt, 3));
-    // std::cout << "After malloc7\n";
-    // quiz->ans3 = (char*) column;
-    // std::cout << "After malloc8\n";
     strcpy(quiz->ans4, (char*)sqlite3_column_text(sqlStmt, 4));
-    // std::cout << "After malloc9\n";
-    // quiz->ans4 = (char*) column;
-    // std::cout << "After malloc10\n";
     char column[2];
     strcpy(column, (char*)sqlite3_column_text(sqlStmt, 5));
-    // std::cout << "After malloc11\n";
+
     quiz->corAns = column[0];
-    // std::cout << "Before return\n";
 
     return quiz;
 }
@@ -383,8 +360,6 @@ static void* playerRoutine(void* args) {
         exit(1);
     }
     if (answered) {
-        // std::cout << receivedChar - 32 << "\n";
-        // std::cout << quiz->corAns << "\n";
         if (quiz->corAns == (char)(receivedChar - 32) || quiz->corAns == (char)receivedChar) {
             players[indexInVec].incScore();
             std::cout << "Correct answer\n";
@@ -411,8 +386,6 @@ static void* playerRoutine(void* args) {
     reachedBarrier++;
     pthread_mutex_unlock(&mutexBarrier);
 
-    // std::cout << "HERE1\n";
-
     bool barrier = true;
     while (barrier) {
         if (reachedBarrier == numberOfPlayers) {
@@ -437,12 +410,10 @@ static void* playerRoutine(void* args) {
         }
 
         Question* quiz;
-        // std::cout << "Before select q\n";
+
         quiz = selectQuestion(questionsIndex[index]);
-        // std::cout << "After select q\n";
 
         sendQuestion(client.sd, *quiz);
-        // std::cout << "After send q\n";
 
         time_t startTime = time(0);
         time_t end, timeTaken;
@@ -485,9 +456,6 @@ static void* playerRoutine(void* args) {
 
         finished = !( index < (numberOfQuestions - 1) );
 
-        // std::cout << "Before send finished = " << finished << " q : " << index << "\n";
-
-        
         nb = send(client.sd, &finished, sizeof(bool), 0);
         if (nb < 0) {
             perror("[server]Eroare send()3\n");
@@ -495,15 +463,10 @@ static void* playerRoutine(void* args) {
             exit(1);
         }
 
-        // std::cout << "After send finished = " << finished << " q : " << index << "\n";
-
-        
-
         pthread_mutex_lock(&mutexBarrier);
         reachedBarrier++;
         pthread_mutex_unlock(&mutexBarrier);
 
-        // std::cout << "BEFORE\n";
         bool barrier = true;
         while (barrier) {
             if (reachedBarrier == numberOfPlayers) {
@@ -517,14 +480,11 @@ static void* playerRoutine(void* args) {
         pthread_mutex_lock(&mutexBarrier);
         passedBarrier++;
         pthread_mutex_unlock(&mutexBarrier);
-
-        // std::cout << "HERE\n";
     }
 
     if(passedBarrier != numberOfPlayers) {
         usleep(50000);
     }
-    // std::cout << "HERE\n";
     
     int maxScore = 0;
     std::vector<Player> winners;

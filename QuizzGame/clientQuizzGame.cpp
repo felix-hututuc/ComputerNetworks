@@ -16,7 +16,7 @@
 
 extern int errno;
 const int PORT = 2022;
-const char* IP = "192.168.1.231";
+const char* IP = "127.0.0.1";
 bool timeExpired = false;
 
 struct Question {
@@ -232,6 +232,8 @@ int main() {
             exit(2);
         } else if (pid == 0) {
             free(quiz);
+            cbreak();
+            noecho();
             int n;
             key = getch();
             // std::cin >> key;
@@ -251,10 +253,9 @@ int main() {
             return errno;
         }
         if (!answered) {
-            kill(pid, SIGTERM);
+            kill(pid, SIGINT);
+            system("clear");
             clear();
-            refresh();
-            // system("clear");
             mvprintw(row / 2, (col - strlen(msg2)) / 2, "%s", msg2);
             refresh();
             // printf("%s\n", msg2);
@@ -333,11 +334,16 @@ int main() {
         close(socketDescriptor);
         exit(1);
     }
-    mvprintw(row / 2 + 5, (col - 19) / 2, "You had %d points", maxScore);
+    mvprintw(row / 2 + 5, (col - 19) / 2, "You had %d points", myScore);
     refresh();
     // std::cout << "You had " << myScore << " points.\n";
     close(socketDescriptor);
-    while(1);
+    key = getch();
+    nocbreak();
+    echo();
+    endwin();
+    //refresh();
+    system("clear");
     return 0;
     
 }
