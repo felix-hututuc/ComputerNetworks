@@ -17,18 +17,23 @@
 #include <signal.h>
 #include <algorithm>
 #include <random>
+#include <time.h>
 #include "Player.h"
 
 #define PORT 2022
 
 extern int errno;
-const char* IP = "192.168.1.231";
+const char* IP = "127.0.0.1";
 const char* DIR = "./db/QUIZZ.db";
 bool acceptPlayers = true, openServer = true;
 int numberOfPlayers = 0, numberOfThreads = 0;
+int timeToAnswer = 10, numberOfQuestions = 3;
+int reachedBarrier = 0, passedBarrier = 0;
 std::vector<Player> players;
 std::vector<int> questionsIndex;
-pthread_mutex_t mutexPlayerVec;
+pthread_mutex_t mutexPlayerVec, mutexBarrier;
+//pthread_barrier_t barrierQuestions;
+sqlite3* DB;
 
 
 struct ThreadArg {
@@ -37,7 +42,8 @@ struct ThreadArg {
 };
 
 struct Question {
-    std::string question, ans1, ans2, ans3, ans4;
+    // std::string question, ans1, ans2, ans3, ans4;
+    char question[100], ans1[100], ans2[100], ans3[100], ans4[100];
     char corAns;
 };
 
@@ -46,30 +52,26 @@ void sigHandler(int sign)
     if(sign == SIGINT) {
         openServer = false;
         printf("Exiting server\n");
+        exit(0);
     }
 
-    if(sign == SIGPIPE) {
-        printf("A player left the game.\n");
-        numberOfThreads--;
-    }
+    // if(sign == SIGPIPE) {
+    //     printf("A player left the game.\n");
+    //     numberOfThreads--;
+    //     numberOfPlayers--;
+    // }
 }
 
 static int createDB()
 {
-    sqlite3* DB;
-    
-    if (sqlite3_open(DIR, &DB) < 0) {
-        perror("Eroare creare db\n");
-        return -1;
-    }
 
     std::string sql = "CREATE TABLE IF NOT EXISTS QUIZZ("
         "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
         "QUESTION VARCHAR2(100) NOT NULL, "
-        "ANS1 VARCHAR2(50) NOT NULL, "
-        "ANS2 VARCHAR2(50) NOT NULL, "
-        "ANS3 VARCHAR2(50) NOT NULL, "
-        "ANS4 VARCHAR2(50) NOT NULL, "
+        "ANS1 VARCHAR2(100) NOT NULL, "
+        "ANS2 VARCHAR2(100) NOT NULL, "
+        "ANS3 VARCHAR2(100) NOT NULL, "
+        "ANS4 VARCHAR2(100) NOT NULL, "
         "CORANS CHAR(1) NOT NULL );";
 
     char* errorMsg;
@@ -81,17 +83,15 @@ static int createDB()
     } else {
         std::cout << "DB and Table created succesfuly\n";
     }
-    sqlite3_close(DB);
 
     return 0;
 }
 
 static int insertData()
 {
-    sqlite3* DB;
     char* errorMsg;
 
-    int ret = sqlite3_open(DIR, &DB);
+    int ret;
 
     std::string sql("INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('What protocol is used to find the hardware address of a local device?', 'RARP', 'ARP', 'IP', 'ICMP', 'B');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which of the following animals can run the fastest?', 'Cheetah', 'Leopard', 'Tiger', 'Lion', 'A');"
@@ -103,7 +103,7 @@ static int insertData()
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which of the following services is used to translate a web address into an IP address?', 'DNS', 'WINS', 'DHCP', 'Telnet', 'A');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which protocol is used by FTP to transfer files over the Internet?', 'SMTP', 'UDP', 'SNMP', 'TCP', 'D');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which port number is used by SMTP ?', '20', '23', '25', '143', 'C');"
-    "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('What is the purpose of TCP/UDP port numbers ?', 'To indicate the beginning of a three-way handshake', 'To reassemble the segments into the correct order', 'To identify the numbers of the data packets that can be sent without acknowledgment', 'To track the different conversations crossing the network at the same time', 'D');"
+    "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('A distributed network configuration in which all data/information pass through a central computer is', 'Star network', 'Bus network', 'Ring network', 'None of these answers', 'A');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('Which layer 4 protocol is used for a Telnet connection?', 'IP', 'TCP', 'TCP/IP', 'UDP', 'B');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('If you use either Telnet or FTP, which is the highest layer you are using to transmit data?', 'Application', 'Presentation', 'Session', 'Transport', 'A');"
     "INSERT INTO QUIZZ (QUESTION, ANS1, ANS2, ANS3, ANS4, CORANS) VALUES('What layer in the TCP/IP stack is equivalent to the Transport layer of the OSI model?', 'Application', 'Host-to-Host', 'Internet', 'Network Access', 'B');"
@@ -137,17 +137,13 @@ static int insertData()
 //     return 0;
 // }
 
-static Question selectQuestion(int index)
+Question* selectQuestion(int index)
 {
-    sqlite3* DB;
-
-    int ret = sqlite3_open(DIR, &DB);
+    int ret;
 
     std::string strIndex = std::to_string(index);
     std::string sql = "SELECT question, ans1, ans2, ans3, ans4, corans FROM QUIZZ WHERE ID = ";
     sql = sql + strIndex + ";";
-
-    // ret = sqlite3_exec(DB, sql.c_str(), callback, NULL, &errorMsg);
 
     sqlite3_stmt* sqlStmt;
     ret = sqlite3_prepare_v2(DB, sql.c_str(), sql.size() + 1, &sqlStmt, NULL);
@@ -155,29 +151,23 @@ static Question selectQuestion(int index)
         perror("Eroare select db");
         exit(-1);
     }
-
     ret = sqlite3_step(sqlStmt);
     if (ret == SQLITE_ERROR) {
         perror("Eroare select db");
         exit(-2);
     }
 
-    Question quiz;
-    unsigned char column[100];
-    //column = sqlite3_column_text(sqlStmt, 0);
-    strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 0));
-    quiz.question = (char*) column;
-    strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 1));
-    quiz.ans1 = (char*) column;
-    strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 2));
-    quiz.ans2 = (char*) column;
-    strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 3));
-    quiz.ans3 = (char*) column;
-    strcpy((char*)column, (char*)sqlite3_column_text(sqlStmt, 4));
-    quiz.ans4 = (char*) column;
-    quiz.corAns = sqlite3_column_int(sqlStmt, 5);
+    Question* quiz = (Question*)malloc(sizeof(Question));
 
-    sqlite3_close(DB);
+    strcpy(quiz->question, (char*)sqlite3_column_text(sqlStmt, 0));
+    strcpy(quiz->ans1, (char*)sqlite3_column_text(sqlStmt, 1));
+    strcpy(quiz->ans2, (char*)sqlite3_column_text(sqlStmt, 2));
+    strcpy(quiz->ans3, (char*)sqlite3_column_text(sqlStmt, 3));
+    strcpy(quiz->ans4, (char*)sqlite3_column_text(sqlStmt, 4));
+    char column[2];
+    strcpy(column, (char*)sqlite3_column_text(sqlStmt, 5));
+
+    quiz->corAns = column[0];
 
     return quiz;
 }
@@ -207,14 +197,14 @@ int sendQuestion(const int& clientSD, const Question& quiz)
     int len, nb;
 
     // Question
-    len = quiz.question.size();
+    len = strlen(quiz.question);
     nb = send(clientSD, &len, sizeof(int), 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
         exit(-1);
     }
-    nb = send(clientSD, quiz.question.c_str(), len + 1, 0);
+    nb = send(clientSD, quiz.question, len + 1, 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
@@ -222,14 +212,14 @@ int sendQuestion(const int& clientSD, const Question& quiz)
     }
 
     //Answer A
-    len = quiz.ans1.size();
+    len = strlen(quiz.ans1);
     nb = send(clientSD, &len, sizeof(int), 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
         exit(-1);
     }
-    nb = send(clientSD, quiz.ans1.c_str(), len + 1, 0);
+    nb = send(clientSD, quiz.ans1, len + 1, 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
@@ -237,14 +227,14 @@ int sendQuestion(const int& clientSD, const Question& quiz)
     }
 
     //Answer B
-    len = quiz.ans2.size();
+    len = strlen(quiz.ans2);
     nb = send(clientSD, &len, sizeof(int), 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
         exit(-1);
     }
-    nb = send(clientSD, quiz.ans2.c_str(), len + 1, 0);
+    nb = send(clientSD, quiz.ans2, len + 1, 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
@@ -252,14 +242,14 @@ int sendQuestion(const int& clientSD, const Question& quiz)
     }
 
     //Answer C
-    len = quiz.ans3.size();
+    len = strlen(quiz.ans3);
     nb = send(clientSD, &len, sizeof(int), 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
         exit(-1);
     }
-    nb = send(clientSD, quiz.ans3.c_str(), len + 1, 0);
+    nb = send(clientSD, quiz.ans3, len + 1, 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
@@ -267,14 +257,14 @@ int sendQuestion(const int& clientSD, const Question& quiz)
     }
 
     //Answer D
-    len = quiz.ans4.size();
+    len = strlen(quiz.ans4);
     nb = send(clientSD, &len, sizeof(int), 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
         exit(-1);
     }
-    nb = send(clientSD, quiz.ans4.c_str(), len + 1, 0);
+    nb = send(clientSD, quiz.ans4, len + 1, 0);
     if(nb < 0) {
         perror("[server]Eroare send()\n");
         close(clientSD);
@@ -339,25 +329,228 @@ static void* playerRoutine(void* args) {
     }
 
     int index = 0;
-    Question quiz;
+    Question* quiz;
 
     quiz = selectQuestion(questionsIndex[index]);
-    sendQuestion(client.sd, quiz);
+
+    sendQuestion(client.sd, *quiz);
+
+    time_t startTime = time(0);
+    time_t end, timeTaken;
+    int timeLeft = timeToAnswer;
+    bool answered = false;
+    while (timeLeft > 0 && !answered){
+        nb = recv(client.sd, &receivedChar, 1, MSG_DONTWAIT);
+        if (nb == 1) {
+            answered = true;
+            break;
+        }
+        else if(nb == 0) {
+            numberOfPlayers--;
+            pthread_exit(NULL);
+        }
+        end = time(0);
+        timeTaken = end - startTime;
+        timeLeft = timeToAnswer - timeTaken;
+    }
+    nb = send(client.sd, &answered, sizeof(bool), 0);
+    if (nb < 0) {
+        perror("[server]Eroare send()\n");
+        close(client.sd);
+        exit(1);
+    }
+    if (answered) {
+        if (quiz->corAns == (char)(receivedChar - 32) || quiz->corAns == (char)receivedChar) {
+            players[indexInVec].incScore();
+            std::cout << "Correct answer\n";
+        } else {
+            std::cout << "Wrong answer\n";
+        }
+    } else {
+        std::cout << "Time expired\n";
+    }
+
+    free(quiz);
+
+    bool finished = !( index < (numberOfQuestions - 1) );
+    std::cout << finished << "\n";
+        
+    nb = send(client.sd, &finished, sizeof(bool), 0);
+    if (nb < 0) {
+        perror("[server]Eroare send()1\n");
+        close(client.sd);
+        exit(1);
+    }
+
+    pthread_mutex_lock(&mutexBarrier);
+    reachedBarrier++;
+    pthread_mutex_unlock(&mutexBarrier);
+
+    bool barrier = true;
+    while (barrier) {
+        if (reachedBarrier == numberOfPlayers) {
+            barrier = false;
+        } else {
+            sleep(1);
+        }
+    }
+    barrier = false;
+
+    pthread_mutex_lock(&mutexBarrier);
+    passedBarrier++;
+    pthread_mutex_unlock(&mutexBarrier);
     
+    if(acceptPlayers)
+        acceptPlayers = false;
+
+    for(index = 1; index < numberOfQuestions; index++) {
+        if(passedBarrier == numberOfPlayers) {
+            reachedBarrier = 0;
+            passedBarrier = 0;
+        }
+
+        Question* quiz;
+
+        quiz = selectQuestion(questionsIndex[index]);
+
+        sendQuestion(client.sd, *quiz);
+
+        time_t startTime = time(0);
+        time_t end, timeTaken;
+        int timeLeft = timeToAnswer;
+        bool answered = false;
+        while (timeLeft > 0 && !answered){
+            nb = recv(client.sd, &receivedChar, 1, MSG_DONTWAIT);
+            if (nb == 1) {
+                answered = true;
+                break;
+            }
+            else if(nb == 0) {
+                numberOfPlayers--;
+                pthread_exit(NULL);
+            }
+            end = time(0);
+            timeTaken = end - startTime;
+            timeLeft = timeToAnswer - timeTaken;
+        }
+        nb = send(client.sd, &answered, sizeof(bool), 0);
+        if (nb < 0) {
+            perror("[server]Eroare send()2\n");
+            close(client.sd);
+            exit(1);
+        }
+        if (answered) {
+            std::cout << receivedChar - 32 << "\n";
+            std::cout << quiz->corAns << "\n";
+            if (quiz->corAns == (char)(receivedChar - 32) || quiz->corAns == (char)receivedChar) {
+                players[indexInVec].incScore();
+                std::cout << "Correct answer\n";
+            } else {
+                std::cout << "Wrong answer\n";
+            }
+        } else {
+            std::cout << "Time expired\n";
+        }
+
+        free(quiz);
+
+        finished = !( index < (numberOfQuestions - 1) );
+
+        nb = send(client.sd, &finished, sizeof(bool), 0);
+        if (nb < 0) {
+            perror("[server]Eroare send()3\n");
+            close(client.sd);
+            exit(1);
+        }
+
+        pthread_mutex_lock(&mutexBarrier);
+        reachedBarrier++;
+        pthread_mutex_unlock(&mutexBarrier);
+
+        bool barrier = true;
+        while (barrier) {
+            if (reachedBarrier == numberOfPlayers) {
+                barrier = false;
+            } else {
+                sleep(1);
+            }
+        }
+        barrier = false;
+
+        pthread_mutex_lock(&mutexBarrier);
+        passedBarrier++;
+        pthread_mutex_unlock(&mutexBarrier);
+    }
+
+    if(passedBarrier != numberOfPlayers) {
+        usleep(50000);
+    }
+    
+    int maxScore = 0;
+    std::vector<Player> winners;
+    for (auto p : players) {
+        if (p.getScore() > maxScore) {
+            maxScore = p.getScore();
+            winners.clear();
+            winners.push_back(p);
+        }
+        else if(p.getScore() == maxScore) {
+            winners.push_back(p);
+        }
+    }
+    int nrOfWinners = winners.size();
+    nb = send(client.sd, &nrOfWinners, sizeof(int), 0);
+    if (nb < 0) {
+        perror("[server]Eroare send()3\n");
+        close(client.sd);
+        exit(1);
+    }
+    nb = send(client.sd, &maxScore, sizeof(int), 0);
+    if (nb < 0) {
+        perror("[server]Eroare send()3\n");
+        close(client.sd);
+        exit(1);
+    }
+    for (int i = 0; i < nrOfWinners; i++) {
+        len = winners[i].getUsername().size();
+        std::string username = winners[i].getUsername();
+        nb = send(client.sd, &len, sizeof(int), 0);
+        if (nb < 0) {
+            perror("[server]Eroare send()3\n");
+            close(client.sd);
+            exit(1);
+        }
+        nb = send(client.sd, username.c_str(), len + 1, 0);
+        if (nb < 0) {
+            perror("[server]Eroare send()3\n");
+            close(client.sd);
+            exit(1);
+        }
+    }
+    int myScore = players[indexInVec].getScore();
+    nb = send(client.sd, &myScore, sizeof(int), 0);
+    if (nb < 0) {
+        perror("[server]Eroare send()3\n");
+        close(client.sd);
+        exit(1);
+    }
+
     close(client.sd);
     free(args);
+
+
     pthread_exit(NULL);
 }
 
 int main(int argc, char* argv[]) {
 
     pid_t pid;
-    if((pid = fork()) < 0) {
+    if ((pid = fork()) < 0) {
         perror("[server]Eroare fork\n");
         return errno;
     }
-    if(pid == 0) {
-        while(1) {
+    if (pid == 0) {
+        while(1) { 
             std::string command;
             std::cin >> command;
             if(command == "quit") {
@@ -366,14 +559,19 @@ int main(int argc, char* argv[]) {
             }
         }
     } else { 
+        if (sqlite3_open(DIR, &DB) < 0) {
+            perror("Eroare open DB\n");
+            return 3;
+        }
         createDB();
-        // insertData();
+        //insertData();
 
         pthread_t* playerThreads;
         pthread_attr_t detachedThreadAttr;
         pthread_attr_init(&detachedThreadAttr);
         pthread_attr_setdetachstate(&detachedThreadAttr, PTHREAD_CREATE_DETACHED);
         pthread_mutex_init(&mutexPlayerVec, NULL);
+        pthread_mutex_init(&mutexBarrier, NULL);
 
         // struct sigaction newHandler;
         // struct sigaction oldHandler;
@@ -386,10 +584,10 @@ int main(int argc, char* argv[]) {
         //     return errno;
         // }
 
-        // if(signal(SIGINT, sigHandler) == SIG_ERR) {
-        //     perror("[server]Eroare signal.\n");
-        //     return errno;
-        // }
+        if(signal(SIGINT, sigHandler) == SIG_ERR) {
+            perror("[server]Eroare signal.\n");
+            return errno;
+        }
 
         if(signal(SIGPIPE, sigHandler) == SIG_ERR) {
             perror("[server]Eroare signal.\n");
@@ -469,6 +667,7 @@ int main(int argc, char* argv[]) {
 
         pthread_attr_destroy(&detachedThreadAttr);
         pthread_mutex_destroy(&mutexPlayerVec);
+        pthread_mutex_destroy(&mutexBarrier);
 
         exit(0);
     }
